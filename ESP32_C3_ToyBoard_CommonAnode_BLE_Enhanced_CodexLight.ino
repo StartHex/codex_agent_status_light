@@ -20,7 +20,7 @@
 // 5. traffic 最多运行 10 分钟，然后自动 off。
 // =====================================================
 
-const char* BLE_DEVICE_NAME = "CursorLight";
+const char* BLE_DEVICE_NAME = "CodexLight";
 
 #define SERVICE_UUID        "b8b7e001-7a6b-4f4f-9a8b-11c0ffee0001"
 #define MODE_CHAR_UUID      "b8b7e002-7a6b-4f4f-9a8b-11c0ffee0001"
@@ -417,7 +417,7 @@ void setup() {
   Serial.println();
   Serial.println("Power on. Default mode: demo");
   Serial.println("Common anode BLE enhanced version.");
-  Serial.println("BLE device name: CursorLight");
+  Serial.println("BLE device name: CodexLight");
 
   BLEDevice::init(BLE_DEVICE_NAME);
 

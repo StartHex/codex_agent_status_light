@@ -1,0 +1,74 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CODEX_LIGHT_DRY_RUN=${CODEX_LIGHT_DRY_RUN:-0} python3 ~/.codex/hooks/codex-light/codex_light.py",
+            "statusMessage": "CodexLight session"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CODEX_LIGHT_DRY_RUN=${CODEX_LIGHT_DRY_RUN:-0} python3 ~/.codex/hooks/codex-light/codex_light.py",
+            "statusMessage": "CodexLight thinking"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CODEX_LIGHT_DRY_RUN=${CODEX_LIGHT_DRY_RUN:-0} python3 ~/.codex/hooks/codex-light/codex_light.py",
+            "statusMessage": "CodexLight waiting"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CODEX_LIGHT_DRY_RUN=${CODEX_LIGHT_DRY_RUN:-0} python3 ~/.codex/hooks/codex-light/codex_light.py",
+            "statusMessage": "CodexLight busy"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CODEX_LIGHT_DRY_RUN=${CODEX_LIGHT_DRY_RUN:-0} python3 ~/.codex/hooks/codex-light/codex_light.py",
+            "statusMessage": "CodexLight tool result"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CODEX_LIGHT_DRY_RUN=${CODEX_LIGHT_DRY_RUN:-0} python3 ~/.codex/hooks/codex-light/codex_light.py",
+            "statusMessage": "CodexLight done"
+          }
+        ]
+      }
+    ]
+  }
+}

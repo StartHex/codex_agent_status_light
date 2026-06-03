@@ -1,0 +1,6 @@
+__MACOSX/
+**/__pycache__/
+*.pyc
+codex-light-bundle/*.log
+codex-light-bundle/*state.json
+codex-light-bundle/*.lock
