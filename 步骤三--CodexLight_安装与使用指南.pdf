@@ -1,0 +1,49 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Length 852 >>
+stream
+BT
+/F2 22 Tf 50 800 Td (CodexLight Step 3 - Codex CLI Installation) Tj
+/F2 15 Tf 50 766 Td (Install Hooks) Tj
+/F1 10 Tf 50 742 Td (cd codex-light-bundle) Tj
+/F1 10 Tf 50 726 Td (./install-codex-light.sh) Tj
+/F1 10 Tf 50 710 Td (Start Codex CLI and run /hooks. Review and trust the CodexLight hook definitions.) Tj
+/F2 15 Tf 50 686 Td (No-Hardware Test) Tj
+/F1 10 Tf 50 662 Td (CODEX_LIGHT_DRY_RUN=1 python3 codex-light-bundle/codex_light.py --mode thinking) Tj
+/F1 10 Tf 50 646 Td (CODEX_LIGHT_DRY_RUN=1 python3 codex-light-bundle/codex_light_ble.py success) Tj
+/F2 15 Tf 50 622 Td (Real Hardware Test) Tj
+/F1 10 Tf 50 598 Td (python3 -m pip install bleak) Tj
+/F1 10 Tf 50 582 Td (python3 codex-light-bundle/codex_light_ble.py green) Tj
+/F1 10 Tf 50 566 Td (If the device name differs, set CODEX_LIGHT_DEVICE_NAME before running the BLE script.) Tj
+ET
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 5 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 3 0 R >>
+endobj
+5 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+6 0 obj
+<< /Type /Catalog /Pages 5 0 R >>
+endobj
+xref
+0 7
+0000000000 65535 f
+0000000009 00000 n
+0000000077 00000 n
+0000000152 00000 n
+0000001054 00000 n
+0000001190 00000 n
+0000001247 00000 n
+trailer
+<< /Size 7 /Root 6 0 R >>
+startxref
+1296
+%%EOF

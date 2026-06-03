@@ -1,0 +1,47 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Length 703 >>
+stream
+BT
+/F2 22 Tf 50 800 Td (CodexLight Step 1 - Bill of Materials) Tj
+/F2 15 Tf 50 766 Td (Core Parts) Tj
+/F1 10 Tf 50 742 Td (ESP32-C3 SuperMini development board with USB-C.) Tj
+/F1 10 Tf 50 726 Td (Toy traffic-light ornament or any three-light red/yellow/green enclosure.) Tj
+/F1 10 Tf 50 710 Td (Three 220 ohm resistors, one per LED channel.) Tj
+/F1 10 Tf 50 694 Td (Thin hookup wire, heat-shrink tube, USB data cable, soldering tools.) Tj
+/F2 15 Tf 50 670 Td (Electrical Notes) Tj
+/F1 10 Tf 50 646 Td (The firmware assumes a common-anode light board.) Tj
+/F1 10 Tf 50 630 Td (GPIO LOW means LED on; GPIO HIGH means LED off.) Tj
+/F1 10 Tf 50 614 Td (Default pins: IO2 green, IO3 yellow, IO4 red.) Tj
+ET
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 5 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 3 0 R >>
+endobj
+5 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+6 0 obj
+<< /Type /Catalog /Pages 5 0 R >>
+endobj
+xref
+0 7
+0000000000 65535 f
+0000000009 00000 n
+0000000077 00000 n
+0000000152 00000 n
+0000000905 00000 n
+0000001041 00000 n
+0000001098 00000 n
+trailer
+<< /Size 7 /Root 6 0 R >>
+startxref
+1147
+%%EOF
