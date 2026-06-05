@@ -137,8 +137,9 @@ CODEX_LIGHT_DEVICE_NAME=CodexLight python3 codex-light-bundle/codex_light_ble.py
 
 ## HTTP Relay Mode
 
-Use this mode when Codex CLI runs on a remote server, but the ESP32 BLE light is
-near your local Mac/Windows/Linux machine.
+Use this mode when Codex CLI runs on a remote server, but the ESP32 light is
+near your local Mac/Windows/Linux machine. The local poller can drive the light
+through BLE or through the ESP32-C3 USB serial port.
 
 Architecture:
 
@@ -146,7 +147,7 @@ Architecture:
 Remote Codex CLI hooks
   -> POST http://server:8765/status
   -> local poller GET http://server:8765/status
-  -> local BLE write to CodexLight
+  -> local BLE or USB serial write to CodexLight
 ```
 
 Run the HTTP status server on the Codex server:
@@ -176,13 +177,21 @@ cd codex-light-bundle
 ./install-codex-light.sh
 ```
 
-On the local machine near the BLE light, install BLE dependency and start the
-poller:
+On the local machine near the light, start the poller. For BLE, install
+`bleak`. For USB serial, install `pyserial` and set `CODEX_LIGHT_DRIVER=serial`.
 
 ```bash
-python3 -m pip install bleak
 export CODEX_LIGHT_SERVER_URL='http://SERVER_IP:8765'
 export CODEX_LIGHT_API_TOKEN='change-me'
+python3 codex-light-bundle/codex_light_http_client.py poll
+```
+
+USB serial mode:
+
+```bash
+python3 -m pip install pyserial
+export CODEX_LIGHT_DRIVER=serial
+export CODEX_LIGHT_SERIAL_PORT=/dev/cu.usbmodem1101
 python3 codex-light-bundle/codex_light_http_client.py poll
 ```
 
@@ -202,6 +211,38 @@ CODEX_LIGHT_SERVER_URL=http://127.0.0.1:8765 python3 codex-light-bundle/codex_li
 python3 codex-light-bundle/codex_light_http_client.py poll --dry-run
 ```
 
+## cc-connect Hooks
+
+When Codex is launched by `cc-connect` as `codex exec --json`, Codex CLI hooks
+may not be the best status source. Use `cc-connect` lifecycle hooks to report
+coarse status into the same HTTP relay:
+
+```toml
+[[hooks]]
+event = "message.received"
+type = "command"
+command = "/home/ubuntu/.codex/hooks/codex-light/cc_connect_light.sh thinking message.received"
+async = true
+timeout = 5
+
+[[hooks]]
+event = "message.sent"
+type = "command"
+command = "/home/ubuntu/.codex/hooks/codex-light/cc_connect_light.sh off message.sent"
+async = true
+timeout = 5
+```
+
+Typical mapping:
+
+| cc-connect event | Mode |
+|---|---|
+| `message.received` | `thinking` |
+| `session.started` | `green` |
+| `permission.requested` | `yellow` |
+| `error` | `error` |
+| `message.sent` | `off` |
+
 ## Environment Variables
 
 | Variable | Purpose |
@@ -211,6 +252,8 @@ python3 codex-light-bundle/codex_light_http_client.py poll --dry-run
 | `CODEX_LIGHT_DEVICE_NAME=CodexLight` | BLE advertised device name |
 | `CODEX_LIGHT_SERVER_URL=http://server:8765` | Send hook status to the HTTP relay instead of direct BLE |
 | `CODEX_LIGHT_API_TOKEN=...` | Optional shared token for HTTP relay requests |
+| `CODEX_LIGHT_DRIVER=auto|serial|ble` | Local HTTP poller driver selection |
+| `CODEX_LIGHT_SERIAL_PORT=/dev/cu.usbmodem1101` | Serial port used by the local poller |
 | `CODEX_LIGHT_HTTP_TIMEOUT=5` | HTTP reporting timeout in seconds |
 | `CODEX_LIGHT_HTTP_FALLBACK_BLE=1` | Fall back to local BLE if HTTP reporting fails |
 | `CODEX_LIGHT_HOST=0.0.0.0` | Default HTTP server listen host |

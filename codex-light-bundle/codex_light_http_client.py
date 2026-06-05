@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""HTTP client and BLE poller for CodexLight."""
+"""HTTP client and local light poller for CodexLight."""
 
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import subprocess
@@ -64,6 +65,58 @@ def send_ble(mode: str, dry_run: bool = False) -> int:
     return completed.returncode
 
 
+def find_serial_port() -> str:
+    for pattern in (
+        os.environ.get("CODEX_LIGHT_SERIAL_PORT", ""),
+        "/dev/cu.usbmodem*",
+        "/dev/ttyACM*",
+        "/dev/ttyUSB*",
+    ):
+        if not pattern:
+            continue
+        matches = sorted(glob.glob(pattern))
+        if matches:
+            return matches[0]
+    return ""
+
+
+def send_serial(mode: str, port: str = "", dry_run: bool = False) -> int:
+    port = port or find_serial_port()
+    if not port:
+        print("serial send failed: no serial port found", file=sys.stderr)
+        return 5
+    if dry_run:
+        print(f"[dry-run] CodexLight serial port={port} mode={mode}")
+        return 0
+    try:
+        import serial
+    except ImportError:
+        print("serial send failed: missing pyserial; install with python3 -m pip install pyserial", file=sys.stderr)
+        return 4
+    try:
+        with serial.Serial(port, 115200, timeout=2, write_timeout=2) as connection:
+            connection.dtr = False
+            connection.rts = False
+            time.sleep(0.05)
+            connection.write((mode + "\n").encode("utf-8"))
+            connection.flush()
+        return 0
+    except OSError as exc:
+        print(f"serial send failed port={port}: {exc}", file=sys.stderr)
+        return 6
+
+
+def send_light(mode: str, driver: str = "auto", serial_port: str = "", dry_run: bool = False) -> int:
+    if driver == "serial":
+        return send_serial(mode, port=serial_port, dry_run=dry_run)
+    if driver == "ble":
+        return send_ble(mode, dry_run=dry_run)
+    port = serial_port or find_serial_port()
+    if port:
+        return send_serial(mode, port=port, dry_run=dry_run)
+    return send_ble(mode, dry_run=dry_run)
+
+
 def print_json(data: dict[str, Any]) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
@@ -106,12 +159,12 @@ def run_poll(args: argparse.Namespace) -> int:
             seq = int(status.get("seq") or 0)
             if mode in VALID_MODES and (args.force or seq != last_seq or mode != last_mode):
                 print(f"CodexLight seq={seq} mode={mode} source={status.get('source')}")
-                rc = send_ble(mode, dry_run=args.dry_run)
+                rc = send_light(mode, driver=args.driver, serial_port=args.serial_port, dry_run=args.dry_run)
                 if rc == 0:
                     last_seq = seq
                     last_mode = mode
                 else:
-                    print(f"BLE send failed with exit code {rc}", file=sys.stderr)
+                    print(f"light send failed with exit code {rc}", file=sys.stderr)
             time.sleep(args.interval)
         except KeyboardInterrupt:
             return 0
@@ -139,6 +192,8 @@ def parse_args() -> argparse.Namespace:
     poll = subparsers.add_parser("poll", help="Poll server status and send mode to BLE")
     poll.add_argument("--interval", type=float, default=1.0)
     poll.add_argument("--error-interval", type=float, default=5.0)
+    poll.add_argument("--driver", choices=("auto", "serial", "ble"), default=os.environ.get("CODEX_LIGHT_DRIVER", "auto"))
+    poll.add_argument("--serial-port", default=os.environ.get("CODEX_LIGHT_SERIAL_PORT", ""))
     poll.add_argument("--dry-run", action="store_true")
     poll.add_argument("--force", action="store_true", help="Send every poll even when seq/mode did not change")
     poll.set_defaults(func=run_poll)

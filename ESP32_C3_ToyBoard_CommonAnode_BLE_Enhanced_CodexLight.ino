@@ -15,9 +15,7 @@
 // 注意：
 // 1. 原灯板 - / 原电池负极 第一版先不要接。
 // 2. 公共正极：GPIO LOW = 灯亮，GPIO HIGH = 灯灭。
-// 3. 默认开机模式：demo
-// 4. 除 off、traffic 外，其他模式最多运行 5 分钟，然后自动进入 traffic。
-// 5. traffic 最多运行 10 分钟，然后自动 off。
+// 3. 默认开机模式：off，等待 Codex 状态驱动。
 // =====================================================
 
 const char* BLE_DEVICE_NAME = "CodexLight";
@@ -38,11 +36,9 @@ const int RED_MAX = 255;
 const int YELLOW_MAX = 220;
 const int GREEN_MAX = 220;
 
-const unsigned long NORMAL_MODE_TIMEOUT_MS = 5UL * 60UL * 1000UL;   // 5 分钟
-const unsigned long TRAFFIC_MODE_TIMEOUT_MS = 10UL * 60UL * 1000UL; // 10 分钟
-
-String currentMode = "demo";
+String currentMode = "off";
 unsigned long modeStart = 0;
+String serialCommand = "";
 
 BLEServer* pServer = nullptr;
 BLECharacteristic* pModeCharacteristic = nullptr;
@@ -184,23 +180,23 @@ void setMode(String mode) {
 }
 
 void autoTimeoutCheck() {
-  unsigned long elapsed = millis() - modeStart;
+  // CodexLight is status-driven; do not leave the current state unless BLE changes it.
+}
 
-  if (currentMode == "off") {
-    return;
-  }
-
-  if (currentMode == "traffic") {
-    if (elapsed >= TRAFFIC_MODE_TIMEOUT_MS) {
-      Serial.println("Traffic timeout -> off");
-      setMode("off");
+void handleSerialInput() {
+  while (Serial.available() > 0) {
+    char ch = (char)Serial.read();
+    if (ch == '\n' || ch == '\r') {
+      serialCommand.trim();
+      if (serialCommand.length() > 0) {
+        Serial.print("Serial write: ");
+        Serial.println(serialCommand);
+        setMode(serialCommand);
+      }
+      serialCommand = "";
+    } else if (serialCommand.length() < 32) {
+      serialCommand += ch;
     }
-    return;
-  }
-
-  if (elapsed >= NORMAL_MODE_TIMEOUT_MS) {
-    Serial.println("Normal mode timeout -> traffic");
-    setMode("traffic");
   }
 }
 
@@ -411,11 +407,12 @@ void setup() {
 
   allOff();
 
-  currentMode = "demo";
+  currentMode = "off";
   modeStart = millis();
 
   Serial.println();
-  Serial.println("Power on. Default mode: demo");
+  Serial.println("Power on. Default mode: off");
+  Serial.println("Waiting for Codex status over BLE or USB serial.");
   Serial.println("Common anode BLE enhanced version.");
   Serial.println("BLE device name: CodexLight");
 
@@ -458,6 +455,7 @@ void setup() {
 // =====================================================
 
 void loop() {
+  handleSerialInput();
   autoTimeoutCheck();
 
   if (currentMode == "busy") {

@@ -2,7 +2,8 @@
 
 CodexLight lets the ESP32-C3 status light show Codex CLI status.
 It uses Codex lifecycle hooks and the existing BLE sender.
-It can also run through an HTTP relay when Codex CLI is on a remote server.
+It can also run through an HTTP relay when Codex CLI is on a remote server,
+with a local BLE or USB serial poller near the light.
 
 ## Status mapping
 
@@ -66,5 +67,18 @@ export CODEX_LIGHT_SERVER_URL='http://SERVER_IP:8765'
 python3 ~/.codex/hooks/codex-light/codex_light_http_client.py poll
 ```
 
+For an ESP32-C3 connected by USB, use serial mode instead of BLE:
+
+```bash
+python3 -m pip install pyserial
+export CODEX_LIGHT_DRIVER=serial
+export CODEX_LIGHT_SERIAL_PORT=/dev/cu.usbmodem1101
+python3 ~/.codex/hooks/codex-light/codex_light_http_client.py poll
+```
+
 Use `CODEX_LIGHT_API_TOKEN` on both sides if the relay is reachable by other
 machines.
+
+When Codex is launched through `cc-connect`, use `cc_connect_light.sh` from
+`cc-connect` lifecycle hooks. A common mapping is `message.received -> thinking`
+and `message.sent -> off`.
