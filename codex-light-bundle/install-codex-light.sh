@@ -12,7 +12,11 @@ if ! mkdir -p "$DEST_DIR"; then
 fi
 cp "$SRC_DIR/codex_light.py" "$DEST_DIR/"
 cp "$SRC_DIR/codex_light_ble.py" "$DEST_DIR/"
+cp "$SRC_DIR/codex_light_http_client.py" "$DEST_DIR/"
+cp "$SRC_DIR/codex_light_server.py" "$DEST_DIR/"
 chmod +x "$DEST_DIR/codex_light.py"
+chmod +x "$DEST_DIR/codex_light_http_client.py"
+chmod +x "$DEST_DIR/codex_light_server.py"
 
 if ! mkdir -p "$(dirname "$HOOKS_FILE")"; then
   echo "Cannot create $(dirname "$HOOKS_FILE")."

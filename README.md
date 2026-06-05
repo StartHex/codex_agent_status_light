@@ -22,6 +22,8 @@ ESP32_C3_ToyBoard_CommonAnode_BLE_Enhanced_CodexLight.ino
 codex-light-bundle/
 ├─ codex_light.py
 ├─ codex_light_ble.py
+├─ codex_light_http_client.py
+├─ codex_light_server.py
 ├─ codex-hooks.json.snippet
 └─ install-codex-light.sh
 ```
@@ -133,6 +135,73 @@ override the device name:
 CODEX_LIGHT_DEVICE_NAME=CodexLight python3 codex-light-bundle/codex_light_ble.py green
 ```
 
+## HTTP Relay Mode
+
+Use this mode when Codex CLI runs on a remote server, but the ESP32 BLE light is
+near your local Mac/Windows/Linux machine.
+
+Architecture:
+
+```text
+Remote Codex CLI hooks
+  -> POST http://server:8765/status
+  -> local poller GET http://server:8765/status
+  -> local BLE write to CodexLight
+```
+
+Run the HTTP status server on the Codex server:
+
+```bash
+python3 codex-light-bundle/codex_light_server.py --host 0.0.0.0 --port 8765
+```
+
+Optional token protection:
+
+```bash
+export CODEX_LIGHT_API_TOKEN='change-me'
+python3 codex-light-bundle/codex_light_server.py --host 0.0.0.0 --port 8765
+```
+
+Configure the Codex hook environment on the Codex server:
+
+```bash
+export CODEX_LIGHT_SERVER_URL='http://SERVER_IP:8765'
+export CODEX_LIGHT_API_TOKEN='change-me'
+```
+
+Then install hooks as usual:
+
+```bash
+cd codex-light-bundle
+./install-codex-light.sh
+```
+
+On the local machine near the BLE light, install BLE dependency and start the
+poller:
+
+```bash
+python3 -m pip install bleak
+export CODEX_LIGHT_SERVER_URL='http://SERVER_IP:8765'
+export CODEX_LIGHT_API_TOKEN='change-me'
+python3 codex-light-bundle/codex_light_http_client.py poll
+```
+
+Manual status query and light control:
+
+```bash
+python3 codex-light-bundle/codex_light_http_client.py status
+python3 codex-light-bundle/codex_light_http_client.py send green
+python3 codex-light-bundle/codex_light_http_client.py send off
+```
+
+No-hardware relay test:
+
+```bash
+python3 codex-light-bundle/codex_light_server.py --host 127.0.0.1 --port 8765
+CODEX_LIGHT_SERVER_URL=http://127.0.0.1:8765 python3 codex-light-bundle/codex_light.py --mode thinking
+python3 codex-light-bundle/codex_light_http_client.py poll --dry-run
+```
+
 ## Environment Variables
 
 | Variable | Purpose |
@@ -140,6 +209,13 @@ CODEX_LIGHT_DEVICE_NAME=CodexLight python3 codex-light-bundle/codex_light_ble.py
 | `CODEX_LIGHT_DRY_RUN=1` | Do not scan BLE; only log/print mode |
 | `CODEX_LIGHT_PYTHON=/path/to/python3` | Python executable used by hook adapter |
 | `CODEX_LIGHT_DEVICE_NAME=CodexLight` | BLE advertised device name |
+| `CODEX_LIGHT_SERVER_URL=http://server:8765` | Send hook status to the HTTP relay instead of direct BLE |
+| `CODEX_LIGHT_API_TOKEN=...` | Optional shared token for HTTP relay requests |
+| `CODEX_LIGHT_HTTP_TIMEOUT=5` | HTTP reporting timeout in seconds |
+| `CODEX_LIGHT_HTTP_FALLBACK_BLE=1` | Fall back to local BLE if HTTP reporting fails |
+| `CODEX_LIGHT_HOST=0.0.0.0` | Default HTTP server listen host |
+| `CODEX_LIGHT_PORT=8765` | Default HTTP server listen port |
+| `CODEX_LIGHT_STATE_FILE=/path/status.json` | HTTP server state file |
 | `CODEX_LIGHT_DEST=/path` | Installer destination override |
 | `CODEX_HOOKS_FILE=/path/hooks.json` | Installer hooks file override |
 

@@ -17,12 +17,15 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib import request
+from urllib.error import URLError
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 BLE_SCRIPT = SCRIPT_DIR / "codex_light_ble.py"
 LOG_PATH = SCRIPT_DIR / "codex-light.log"
 STATE_PATH = SCRIPT_DIR / "codex-light-state.json"
 LOCK_PATH = SCRIPT_DIR / "codex-light-state.lock"
+DEFAULT_HTTP_TIMEOUT = 5.0
 
 VALID_MODES = {
     "red",
@@ -172,18 +175,60 @@ def map_event(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def send_mode(mode: str, payload: dict[str, Any] | None = None) -> int:
-    if mode not in VALID_MODES:
-        log(f"invalid mode={mode}")
-        return 1
-    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with LOCK_PATH.open("w", encoding="utf-8") as lock_fp:
-        fcntl.flock(lock_fp, fcntl.LOCK_EX)
-        if not should_send(mode, payload):
-            fcntl.flock(lock_fp, fcntl.LOCK_UN)
-            return 0
-        fcntl.flock(lock_fp, fcntl.LOCK_UN)
+def server_url() -> str:
+    return os.environ.get("CODEX_LIGHT_SERVER_URL", "").strip().rstrip("/")
 
+
+def http_token() -> str:
+    return os.environ.get("CODEX_LIGHT_API_TOKEN", "").strip()
+
+
+def minimal_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    payload = payload or {}
+    return {
+        "hook_event_name": payload.get("hook_event_name"),
+        "tool_name": payload.get("tool_name"),
+        "cwd": payload.get("cwd"),
+        "session_id": payload.get("session_id"),
+    }
+
+
+def post_status(mode: str, payload: dict[str, Any] | None = None) -> int:
+    base_url = server_url()
+    if not base_url:
+        return 1
+
+    body = {
+        "mode": mode,
+        "source": os.environ.get("CODEX_LIGHT_SOURCE", "codex-hook"),
+        "event": minimal_payload(payload).get("hook_event_name"),
+        "tool_name": minimal_payload(payload).get("tool_name"),
+        "payload": minimal_payload(payload),
+    }
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    token = http_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        headers["X-Codex-Light-Token"] = token
+
+    url = f"{base_url}/status"
+    timeout = float(os.environ.get("CODEX_LIGHT_HTTP_TIMEOUT", DEFAULT_HTTP_TIMEOUT))
+    req = request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with request.urlopen(req, timeout=timeout) as resp:
+            response_text = resp.read().decode("utf-8", errors="replace").strip()
+    except (OSError, URLError) as exc:
+        log(f"http post failed mode={mode} url={url} error={exc}")
+        return 1
+    if response_text:
+        log(f"http post ok mode={mode} response={response_text[:300]}")
+    else:
+        log(f"http post ok mode={mode}")
+    return 0
+
+
+def send_ble_mode(mode: str) -> int:
     python = os.environ.get("CODEX_LIGHT_PYTHON") or sys.executable
     cmd = [python, str(BLE_SCRIPT), mode]
     if os.environ.get("CODEX_LIGHT_DRY_RUN") == "1":
@@ -207,6 +252,26 @@ def send_mode(mode: str, payload: dict[str, Any] | None = None) -> int:
     if completed.returncode != 0:
         log(f"send returncode={completed.returncode}")
     return completed.returncode
+
+
+def send_mode(mode: str, payload: dict[str, Any] | None = None) -> int:
+    if mode not in VALID_MODES:
+        log(f"invalid mode={mode}")
+        return 1
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK_PATH.open("w", encoding="utf-8") as lock_fp:
+        fcntl.flock(lock_fp, fcntl.LOCK_EX)
+        if not should_send(mode, payload):
+            fcntl.flock(lock_fp, fcntl.LOCK_UN)
+            return 0
+        fcntl.flock(lock_fp, fcntl.LOCK_UN)
+
+    if server_url():
+        result = post_status(mode, payload)
+        if result == 0 or os.environ.get("CODEX_LIGHT_HTTP_FALLBACK_BLE") != "1":
+            return result
+        log("http failed; falling back to BLE")
+    return send_ble_mode(mode)
 
 
 def read_payload() -> dict[str, Any]:
