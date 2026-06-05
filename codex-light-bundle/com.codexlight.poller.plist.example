@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.codexlight.poller</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/YOUR_USER/codex_agent_status_light/codex-light-bundle/codex_light_http_client.py</string>
+    <string>poll</string>
+    <string>--interval</string>
+    <string>1</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/YOUR_USER/codex_agent_status_light/codex-light-bundle</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+    <key>CODEX_LIGHT_SERVER_URL</key>
+    <string>http://SERVER_IP:8765</string>
+    <key>CODEX_LIGHT_API_TOKEN</key>
+    <string>change-me</string>
+    <key>CODEX_LIGHT_DRIVER</key>
+    <string>serial</string>
+    <key>CODEX_LIGHT_SERIAL_PORT</key>
+    <string>/dev/cu.usbmodem1101</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR_USER/Library/Logs/CodexLight/poller.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR_USER/Library/Logs/CodexLight/poller.err.log</string>
+</dict>
+</plist>

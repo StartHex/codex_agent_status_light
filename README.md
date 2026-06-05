@@ -195,6 +195,19 @@ export CODEX_LIGHT_SERIAL_PORT=/dev/cu.usbmodem1101
 python3 codex-light-bundle/codex_light_http_client.py poll
 ```
 
+To run the Mac poller as a LaunchAgent, copy and edit the template:
+
+```bash
+mkdir -p ~/Library/LaunchAgents ~/Library/Logs/CodexLight
+cp codex-light-bundle/com.codexlight.poller.plist.example \
+  ~/Library/LaunchAgents/com.codexlight.poller.plist
+plutil -lint ~/Library/LaunchAgents/com.codexlight.poller.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.codexlight.poller.plist
+launchctl kickstart -k gui/$(id -u)/com.codexlight.poller
+```
+
+Replace `YOUR_USER`, `SERVER_IP`, and `change-me` before loading the agent.
+
 Manual status query and light control:
 
 ```bash
