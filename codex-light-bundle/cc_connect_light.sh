@@ -24,8 +24,8 @@ print(json.dumps({
     "source": "cc-connect-hook",
     "event": event,
     "payload": {
-        "project": os.environ.get("CC_HOOK_PROJECT", ""),
-        "session": os.environ.get("CC_HOOK_SESSION", ""),
+        "project": os.environ.get("CC_HOOK_PROJECT") or os.environ.get("CC_PROJECT", ""),
+        "session": os.environ.get("CC_HOOK_SESSION") or os.environ.get("CC_SESSION_KEY", ""),
         "message_id": os.environ.get("CC_HOOK_MESSAGE_ID", ""),
         "user_name": os.environ.get("CC_HOOK_USER_NAME", ""),
     },

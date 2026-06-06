@@ -39,13 +39,57 @@ DEFAULT_STATE = {
     "event": "startup",
     "tool_name": None,
     "payload": {},
+    "active_sessions": {},
     "seq": 0,
     "updated_at": None,
 }
 
+ACTIVE_MODES = {
+    "red",
+    "yellow",
+    "green",
+    "busy",
+    "error",
+    "thinking",
+    "ai",
+    "traffic",
+    "alarm",
+    "demo",
+}
+
+TERMINAL_EVENTS = {
+    "Stop",
+    "message.sent",
+    "session.ended",
+}
+
+MODE_PRIORITY = {
+    "alarm": 100,
+    "error": 90,
+    "yellow": 80,
+    "ai": 70,
+    "busy": 60,
+    "thinking": 50,
+    "traffic": 40,
+    "red": 30,
+    "green": 20,
+    "demo": 10,
+}
+
+STALE_FALLBACK_SECONDS = int(os.environ.get("CODEX_LIGHT_STALE_FALLBACK_SECONDS", "120"))
+
 
 def now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def parse_iso(ts: Any) -> float:
+    if not isinstance(ts, str) or not ts:
+        return 0
+    try:
+        return time.mktime(time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))
+    except ValueError:
+        return 0
 
 
 def load_state(path: Path) -> dict[str, Any]:
@@ -63,6 +107,123 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     tmp_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp_path.replace(path)
+
+
+def event_name(data: dict[str, Any], payload: dict[str, Any]) -> str:
+    return str(data.get("event") or payload.get("hook_event_name") or "")
+
+
+def session_key(data: dict[str, Any], payload: dict[str, Any]) -> str:
+    source = str(data.get("source") or "unknown")
+
+    session_id = payload.get("session_id")
+    if session_id:
+        return f"{source}:session:{session_id}"
+
+    cc_session = payload.get("session")
+    if cc_session:
+        return f"{source}:cc-session:{cc_session}"
+
+    project = payload.get("project")
+    user_name = payload.get("user_name")
+    if project and user_name:
+        return f"{source}:cc-project-user:{project}:{user_name}"
+    if project:
+        return f"{source}:cc-project:{project}"
+
+    cwd = payload.get("cwd")
+    if cwd:
+        return f"{source}:cwd:{cwd}"
+
+    return f"{source}:global"
+
+
+def has_real_session_key(payload: dict[str, Any]) -> bool:
+    return bool(payload.get("session_id") or payload.get("session"))
+
+
+def ranked_session(item: tuple[str, dict[str, Any]]) -> tuple[int, str, str]:
+    key, session = item
+    mode = str(session.get("mode") or "")
+    return (MODE_PRIORITY.get(mode, 0), str(session.get("updated_at") or ""), key)
+
+
+def is_stale_fallback_session(key: str, session: dict[str, Any], now: float) -> bool:
+    if STALE_FALLBACK_SECONDS <= 0:
+        return False
+    if ":session:" in key or ":cc-session:" in key:
+        return False
+    if session.get("source") != "cc-connect-hook":
+        return False
+    updated = parse_iso(session.get("updated_at"))
+    return updated > 0 and now - updated > STALE_FALLBACK_SECONDS
+
+
+def aggregate_state(state: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    active_sessions = state.get("active_sessions")
+    if not isinstance(active_sessions, dict):
+        active_sessions = {}
+    now = time.time()
+    active_sessions = {
+        key: value
+        for key, value in active_sessions.items()
+        if (
+            isinstance(value, dict)
+            and str(value.get("mode") or "") in ACTIVE_MODES
+            and not is_stale_fallback_session(key, value, now)
+        )
+    }
+    state["active_sessions"] = active_sessions
+
+    if not active_sessions:
+        current_mode = str(state.get("mode") or "")
+        current_source = str(state.get("source") or "")
+        current_event = str(state.get("event") or "")
+        current_payload = state.get("payload") if isinstance(state.get("payload"), dict) else {}
+        current_updated = parse_iso(state.get("updated_at"))
+        current_is_fallback = (
+            current_source == "cc-connect-hook"
+            and not has_real_session_key(current_payload)
+            and current_mode in ACTIVE_MODES
+            and current_event not in TERMINAL_EVENTS
+        )
+        if (
+            current_is_fallback
+            and STALE_FALLBACK_SECONDS > 0
+            and current_updated > 0
+        ):
+            if time.time() - current_updated <= STALE_FALLBACK_SECONDS:
+                return state
+            state.update(
+                {
+                    "mode": "off",
+                    "source": "server",
+                    "event": "idle-timeout",
+                    "tool_name": None,
+                    "payload": {},
+                    "manual": False,
+                }
+            )
+            return state
+        state.update(fallback)
+        return state
+
+    _, best = max(active_sessions.items(), key=ranked_session)
+    payload = best.get("payload") if isinstance(best.get("payload"), dict) else {}
+    state.update(
+        {
+            "mode": best.get("mode"),
+            "source": best.get("source"),
+            "event": best.get("event"),
+            "tool_name": best.get("tool_name"),
+            "payload": {
+                **payload,
+                "active_count": len(active_sessions),
+            },
+            "manual": False,
+        }
+    )
+    return state
 
 
 class CodexLightHandler(BaseHTTPRequestHandler):
@@ -106,7 +267,33 @@ class CodexLightHandler(BaseHTTPRequestHandler):
         return data
 
     def current_state(self) -> dict[str, Any]:
-        return load_state(self.server.state_file)
+        state = load_state(self.server.state_file)
+        tracked_keys = (
+            "mode",
+            "source",
+            "event",
+            "tool_name",
+            "payload",
+            "manual",
+            "active_sessions",
+        )
+        before = json.dumps({key: state.get(key) for key in tracked_keys}, sort_keys=True)
+        fallback = {
+            "mode": "off",
+            "source": "server",
+            "event": "idle",
+            "tool_name": None,
+            "payload": {},
+            "updated_at": now_iso(),
+            "manual": False,
+        }
+        state = aggregate_state(state, fallback)
+        after = json.dumps({key: state.get(key) for key in tracked_keys}, sort_keys=True)
+        if before != after:
+            state["updated_at"] = fallback["updated_at"]
+            state["seq"] = int(state.get("seq") or 0) + 1
+            save_state(self.server.state_file, state)
+        return state
 
     def write_state(self, data: dict[str, Any], manual: bool = False) -> dict[str, Any] | None:
         mode = str(data.get("mode") or "").strip().lower()
@@ -118,16 +305,53 @@ class CodexLightHandler(BaseHTTPRequestHandler):
             return None
 
         state = self.current_state()
+        payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
+        event = event_name(data, payload)
+        source = data.get("source") or ("manual" if manual else "codex-hook")
+        timestamp = now_iso()
+        seq = int(state.get("seq") or 0) + 1
+        active_sessions = state.get("active_sessions")
+        if not isinstance(active_sessions, dict):
+            active_sessions = {}
+
+        incoming = {
+            "mode": mode,
+            "source": source,
+            "event": event,
+            "tool_name": data.get("tool_name"),
+            "payload": payload,
+            "updated_at": timestamp,
+            "manual": manual,
+        }
+
+        key = session_key(data, payload)
+        if manual:
+            # Manual /mode is an explicit override; "off" also clears stale work.
+            if mode == "off":
+                active_sessions = {}
+            state["active_sessions"] = active_sessions
+            state.update(incoming)
+            state["updated_at"] = timestamp
+            state["seq"] = seq
+            save_state(self.server.state_file, state)
+            return state
+
+        should_track_session = has_real_session_key(payload)
+        if event in TERMINAL_EVENTS or mode in {"off", "success"}:
+            active_sessions.pop(key, None)
+        elif should_track_session and mode in ACTIVE_MODES:
+            active_sessions[key] = incoming
+
+        state["active_sessions"] = active_sessions
+        fallback = {
+            **incoming,
+            "updated_at": timestamp,
+        }
+        state = aggregate_state(state, fallback)
         state.update(
             {
-                "mode": mode,
-                "source": data.get("source") or ("manual" if manual else "codex-hook"),
-                "event": data.get("event"),
-                "tool_name": data.get("tool_name"),
-                "payload": data.get("payload") if isinstance(data.get("payload"), dict) else {},
-                "updated_at": now_iso(),
-                "manual": manual,
-                "seq": int(state.get("seq") or 0) + 1,
+                "updated_at": timestamp,
+                "seq": seq,
             }
         )
         save_state(self.server.state_file, state)

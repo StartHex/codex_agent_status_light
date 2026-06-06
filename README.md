@@ -256,6 +256,13 @@ Typical mapping:
 | `error` | `error` |
 | `message.sent` | `off` |
 
+The HTTP relay tracks active sessions before exposing a single light mode. If
+two Codex tasks are running and one finishes first, its terminal event only
+removes that session; the light stays on for the remaining active task. Events
+without a real session id, such as coarse cc-connect `message.received`, are
+treated as transient status and time out instead of being tracked as active
+work.
+
 ## Environment Variables
 
 | Variable | Purpose |
