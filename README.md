@@ -259,9 +259,10 @@ Typical mapping:
 The HTTP relay tracks active sessions before exposing a single light mode. If
 two Codex tasks are running and one finishes first, its terminal event only
 removes that session; the light stays on for the remaining active task. Events
-without a real session id, such as coarse cc-connect `message.received`, are
-treated as transient status and time out instead of being tracked as active
-work.
+without a real session id are treated as transient status and time out instead
+of being tracked as active work. The bundled `cc_connect_light.sh` reads
+`CC_HOOK_SESSION_KEY`, which is the cc-connect session identifier used to pair
+`message.received` with the matching `message.sent`.
 
 ## Environment Variables
 
