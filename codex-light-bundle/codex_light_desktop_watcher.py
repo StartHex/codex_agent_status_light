@@ -33,6 +33,16 @@ VALID_MODES = {
 THREAD_RE = re.compile(r"thread_id=([0-9a-fA-F-]{36})|thread\.id=([0-9a-fA-F-]{36})")
 TURN_RE = re.compile(r"turn_id[=:]\"?([0-9a-fA-F-]{36})|turn\.id=([0-9a-fA-F-]{36})")
 FUNCTION_NAME_RE = re.compile(r'"name"\s*:\s*"([^"]+)"')
+IGNORED_ERROR_TARGET_PREFIXES = (
+    "codex_models_manager::",
+    "codex_core_plugins::manifest",
+    "codex_core_skills::loader",
+)
+ACTIONABLE_ERROR_TARGET_PREFIXES = (
+    "codex_core::tools",
+    "codex_core::tools::router",
+    "codex_api::sse::responses",
+)
 
 
 def now() -> float:
@@ -72,6 +82,26 @@ def first_match(pattern: re.Pattern[str], text: str) -> str:
     return ""
 
 
+def is_actionable_error(level: str, target: str, body: str) -> bool:
+    if level != "ERROR":
+        return False
+    if target.startswith(IGNORED_ERROR_TARGET_PREFIXES):
+        return False
+    if target.startswith(ACTIONABLE_ERROR_TARGET_PREFIXES):
+        return True
+    actionable_markers = (
+        "response.failed",
+        '"type":"response.failed"',
+        '"type":"response.incomplete"',
+        "ToolCall:",
+        "tool failed",
+        "write_stdin failed",
+        "exec_command failed",
+        "apply_patch failed",
+    )
+    return any(marker in body for marker in actionable_markers)
+
+
 def classify(row: sqlite3.Row) -> dict[str, Any] | None:
     level = str(row["level"] or "")
     target = str(row["target"] or "")
@@ -84,7 +114,7 @@ def classify(row: sqlite3.Row) -> dict[str, Any] | None:
     mode = ""
     event = ""
 
-    if level == "ERROR":
+    if is_actionable_error(level, target, body):
         mode = "error"
         event = "desktop.error"
     elif "ToolCall:" in body:
