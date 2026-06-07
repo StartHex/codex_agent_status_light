@@ -146,12 +146,27 @@ Architecture:
 
 ```text
 Remote Codex CLI hooks
-  -> POST http://server:8765/status
-  -> local poller GET http://server:8765/status
+  -> POST http://local-machine-near-light:8765/status
+Local Codex CLI hooks
+  -> POST http://127.0.0.1:8765/status
+Codex Desktop watcher
+  -> POST http://127.0.0.1:8765/status
+Local poller
+  -> GET http://127.0.0.1:8765/status
   -> local BLE or USB serial write to CodexLight
 ```
 
-Run the HTTP status server on the Codex server:
+The HTTP relay aggregates all active sessions before exposing one light mode:
+
+| Aggregate condition | Mode |
+|---|---|
+| Any session is waiting for permission | `yellow` |
+| Any session has an error | `error` |
+| Any session is running | `traffic` |
+| All sessions are done | `off` |
+
+Run the HTTP status server on the local machine near the light. Use
+`0.0.0.0` if remote servers need to POST directly to it:
 
 ```bash
 python3 codex-light-bundle/codex_light_server.py --host 0.0.0.0 --port 8765
@@ -164,10 +179,11 @@ export CODEX_LIGHT_API_TOKEN='change-me'
 python3 codex-light-bundle/codex_light_server.py --host 0.0.0.0 --port 8765
 ```
 
-Configure the Codex hook environment on the Codex server:
+Configure the Codex hook environment on the remote Codex server so it reports
+to the local machine near the light:
 
 ```bash
-export CODEX_LIGHT_SERVER_URL='http://SERVER_IP:8765'
+export CODEX_LIGHT_SERVER_URL='http://LOCAL_MACHINE_IP:8765'
 export CODEX_LIGHT_API_TOKEN='change-me'
 ```
 

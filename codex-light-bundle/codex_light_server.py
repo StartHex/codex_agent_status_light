@@ -58,16 +58,29 @@ ACTIVE_MODES = {
     "demo",
 }
 
+RUNNING_MODES = {
+    "busy",
+    "thinking",
+    "ai",
+    "traffic",
+    "green",
+    "demo",
+}
+
 TERMINAL_EVENTS = {
     "Stop",
     "message.sent",
     "session.ended",
+    "desktop.response.completed",
+    "desktop.response.failed",
+    "desktop.error",
 }
 
 MODE_PRIORITY = {
-    "alarm": 100,
+    "yellow": 100,
     "error": 90,
-    "yellow": 80,
+    "red": 90,
+    "alarm": 80,
     "ai": 70,
     "busy": 60,
     "thinking": 50,
@@ -79,6 +92,9 @@ MODE_PRIORITY = {
 
 STALE_FALLBACK_SECONDS = int(os.environ.get("CODEX_LIGHT_STALE_FALLBACK_SECONDS", "120"))
 TERMINAL_HOLD_SECONDS = float(os.environ.get("CODEX_LIGHT_TERMINAL_HOLD_SECONDS", "3"))
+ERROR_HOLD_SECONDS = float(os.environ.get("CODEX_LIGHT_ERROR_HOLD_SECONDS", "60"))
+SESSION_STALE_SECONDS = float(os.environ.get("CODEX_LIGHT_SESSION_STALE_SECONDS", "300"))
+RUNNING_AGGREGATE_MODE = os.environ.get("CODEX_LIGHT_RUNNING_MODE", "traffic").strip().lower() or "traffic"
 
 
 def now_iso() -> str:
@@ -161,6 +177,45 @@ def is_stale_fallback_session(key: str, session: dict[str, Any], now: float) -> 
     return updated > 0 and now - updated > STALE_FALLBACK_SECONDS
 
 
+def is_expired_session(session: dict[str, Any], now: float) -> bool:
+    expires_at = float(session.get("expires_at") or 0)
+    if expires_at > 0 and now >= expires_at:
+        return True
+    updated = parse_iso(session.get("updated_at"))
+    if updated <= 0 or SESSION_STALE_SECONDS <= 0:
+        return False
+    return now - updated > SESSION_STALE_SECONDS
+
+
+def aggregate_mode(active_sessions: dict[str, dict[str, Any]]) -> tuple[str, dict[str, Any] | None]:
+    waiting = []
+    errors = []
+    running = []
+    other = []
+    for session in active_sessions.values():
+        mode = str(session.get("mode") or "")
+        if mode == "yellow":
+            waiting.append(session)
+        elif mode in {"error", "red", "alarm"}:
+            errors.append(session)
+        elif mode in RUNNING_MODES:
+            running.append(session)
+        else:
+            other.append(session)
+
+    if waiting:
+        return "yellow", max(waiting, key=lambda item: str(item.get("updated_at") or ""))
+    if errors:
+        return "error", max(errors, key=lambda item: str(item.get("updated_at") or ""))
+    if running:
+        mode = RUNNING_AGGREGATE_MODE if RUNNING_AGGREGATE_MODE in VALID_MODES else "traffic"
+        return mode, max(running, key=lambda item: str(item.get("updated_at") or ""))
+    if other:
+        _, best = max(active_sessions.items(), key=ranked_session)
+        return str(best.get("mode") or "off"), best
+    return "off", None
+
+
 def aggregate_state(state: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
     active_sessions = state.get("active_sessions")
     if not isinstance(active_sessions, dict):
@@ -173,6 +228,7 @@ def aggregate_state(state: dict[str, Any], fallback: dict[str, Any]) -> dict[str
             isinstance(value, dict)
             and str(value.get("mode") or "") in ACTIVE_MODES
             and not is_stale_fallback_session(key, value, now)
+            and not is_expired_session(value, now)
         )
     }
     state["active_sessions"] = active_sessions
@@ -184,7 +240,7 @@ def aggregate_state(state: dict[str, Any], fallback: dict[str, Any]) -> dict[str
         current_payload = state.get("payload") if isinstance(state.get("payload"), dict) else {}
         current_updated = parse_iso(state.get("updated_at"))
         if (
-            current_mode in {"success", "error", "green", "red", "yellow"}
+            current_mode in {"error", "red", "yellow"}
             and current_updated > 0
             and TERMINAL_HOLD_SECONDS > 0
             and time.time() - current_updated <= TERMINAL_HOLD_SECONDS
@@ -217,11 +273,14 @@ def aggregate_state(state: dict[str, Any], fallback: dict[str, Any]) -> dict[str
         state.update(fallback)
         return state
 
-    _, best = max(active_sessions.items(), key=ranked_session)
+    mode, best = aggregate_mode(active_sessions)
+    if best is None:
+        state.update(fallback)
+        return state
     payload = best.get("payload") if isinstance(best.get("payload"), dict) else {}
     state.update(
         {
-            "mode": best.get("mode"),
+            "mode": mode,
             "source": best.get("source"),
             "event": best.get("event"),
             "tool_name": best.get("tool_name"),
@@ -318,6 +377,7 @@ class CodexLightHandler(BaseHTTPRequestHandler):
         event = event_name(data, payload)
         source = data.get("source") or ("manual" if manual else "codex-hook")
         timestamp = now_iso()
+        now_ts = time.time()
         seq = int(state.get("seq") or 0) + 1
         active_sessions = state.get("active_sessions")
         if not isinstance(active_sessions, dict):
@@ -332,6 +392,8 @@ class CodexLightHandler(BaseHTTPRequestHandler):
             "updated_at": timestamp,
             "manual": manual,
         }
+        if mode in {"error", "red", "alarm"} and ERROR_HOLD_SECONDS > 0:
+            incoming["expires_at"] = now_ts + ERROR_HOLD_SECONDS
 
         key = session_key(data, payload)
         if manual:
@@ -346,7 +408,9 @@ class CodexLightHandler(BaseHTTPRequestHandler):
             return state
 
         should_track_session = has_real_session_key(payload)
-        if event in TERMINAL_EVENTS or mode in {"off", "success", "error"}:
+        if mode in {"error", "red", "alarm"} and should_track_session:
+            active_sessions[key] = incoming
+        elif event in TERMINAL_EVENTS or mode in {"off", "success"}:
             active_sessions.pop(key, None)
         elif should_track_session and mode in ACTIVE_MODES:
             active_sessions[key] = incoming
@@ -356,6 +420,17 @@ class CodexLightHandler(BaseHTTPRequestHandler):
             **incoming,
             "updated_at": timestamp,
         }
+        if mode in {"off", "success"} or event in TERMINAL_EVENTS and mode not in {"error", "red", "alarm"}:
+            fallback.update(
+                {
+                    "mode": "off",
+                    "source": "server",
+                    "event": "idle",
+                    "tool_name": None,
+                    "payload": {},
+                    "manual": False,
+                }
+            )
         state = aggregate_state(state, fallback)
         state.update(
             {

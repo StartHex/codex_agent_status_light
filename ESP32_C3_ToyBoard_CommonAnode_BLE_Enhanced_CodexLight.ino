@@ -33,8 +33,8 @@ const int PWM_RESOLUTION = 8;
 
 // 红灯偏弱，所以红灯单独增强
 const int RED_MAX = 255;
-const int YELLOW_MAX = 220;
-const int GREEN_MAX = 220;
+const int YELLOW_MAX = 255;
+const int GREEN_MAX = 255;
 
 String currentMode = "off";
 unsigned long modeStart = 0;
@@ -207,13 +207,19 @@ void handleSerialInput() {
 
 void updateBusy() {
   unsigned long t = millis() - modeStart;
-  int y = fadeInOutBrightness(t, 80, 500, 120, 500, YELLOW_MAX);
+  int y = fadeInOutBrightness(t, 60, 900, 90, 260, YELLOW_MAX);
+  setOnly(0, y, 0);
+}
+
+void updateYellow() {
+  unsigned long t = millis() - modeStart;
+  int y = fadeInOutBrightness(t, 50, 850, 80, 260, YELLOW_MAX);
   setOnly(0, y, 0);
 }
 
 void updateError() {
   unsigned long t = millis() - modeStart;
-  int r = fadeInOutBrightness(t, 40, 180, 80, 180, RED_MAX);
+  int r = fadeInOutBrightness(t, 40, 700, 80, 220, RED_MAX);
   setOnly(r, 0, 0);
 }
 
@@ -292,39 +298,7 @@ void updateAlarm() {
 
 // traffic：红灯变绿前红闪；绿灯变黄前绿闪
 void updateTraffic() {
-  unsigned long t = (millis() - modeStart) % 15000;
-
-  if (t < 5000) {
-    setOnly(RED_MAX, 0, 0);
-  }
-
-  else if (t < 6500) {
-    unsigned long phase = (t - 5000) % 500;
-    int r = 0;
-    if (phase < 60) r = map(phase, 0, 60, 0, RED_MAX);
-    else if (phase < 230) r = RED_MAX;
-    else if (phase < 320) r = map(phase, 230, 320, RED_MAX, 0);
-    else r = 0;
-    setOnly(r, 0, 0);
-  }
-
-  else if (t < 11500) {
-    setOnly(0, 0, GREEN_MAX);
-  }
-
-  else if (t < 13000) {
-    unsigned long phase = (t - 11500) % 500;
-    int g = 0;
-    if (phase < 60) g = map(phase, 0, 60, 0, GREEN_MAX);
-    else if (phase < 230) g = GREEN_MAX;
-    else if (phase < 320) g = map(phase, 230, 320, GREEN_MAX, 0);
-    else g = 0;
-    setOnly(0, 0, g);
-  }
-
-  else {
-    setOnly(0, YELLOW_MAX, 0);
-  }
+  updateThinking();
 }
 
 // demo：默认开机演示模式
@@ -460,6 +434,8 @@ void loop() {
 
   if (currentMode == "busy") {
     updateBusy();
+  } else if (currentMode == "yellow") {
+    updateYellow();
   } else if (currentMode == "error") {
     updateError();
   } else if (currentMode == "thinking") {
