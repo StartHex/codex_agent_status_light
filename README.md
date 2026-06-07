@@ -23,6 +23,7 @@ codex-light-bundle/
 ├─ codex_light.py
 ├─ codex_light_ble.py
 ├─ codex_light_http_client.py
+├─ codex_light_desktop_watcher.py
 ├─ codex_light_server.py
 ├─ codex-hooks.json.snippet
 └─ install-codex-light.sh
@@ -215,6 +216,31 @@ python3 codex-light-bundle/codex_light_http_client.py status
 python3 codex-light-bundle/codex_light_http_client.py send green
 python3 codex-light-bundle/codex_light_http_client.py send off
 ```
+
+## Codex Desktop Watcher
+
+Codex Desktop may not expose Codex CLI hook events directly. On macOS, the
+desktop app writes local activity to `~/.codex/logs_2.sqlite`. The watcher can
+infer coarse states from that log database and report them to the HTTP relay:
+
+```bash
+python3 codex-light-bundle/codex_light_server.py --host 127.0.0.1 --port 8765
+python3 codex-light-bundle/codex_light_desktop_watcher.py
+python3 codex-light-bundle/codex_light_http_client.py poll
+```
+
+Typical mapping:
+
+| Desktop log pattern | Mode |
+|---|---|
+| user input / response started | `thinking` |
+| function call / command execution | `busy` |
+| `apply_patch` tool call | `ai` |
+| response completed | `success` |
+| error / failed response | `error` |
+
+To run it as a LaunchAgent, copy and edit
+`codex-light-bundle/com.codexlight.desktop-watcher.plist.example`.
 
 No-hardware relay test:
 

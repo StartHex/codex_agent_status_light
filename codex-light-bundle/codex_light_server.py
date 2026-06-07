@@ -9,6 +9,7 @@ status with POST /status. A local machine near the BLE light can poll GET
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
 import os
 import time
@@ -77,6 +78,7 @@ MODE_PRIORITY = {
 }
 
 STALE_FALLBACK_SECONDS = int(os.environ.get("CODEX_LIGHT_STALE_FALLBACK_SECONDS", "120"))
+TERMINAL_HOLD_SECONDS = float(os.environ.get("CODEX_LIGHT_TERMINAL_HOLD_SECONDS", "3"))
 
 
 def now_iso() -> str:
@@ -87,7 +89,7 @@ def parse_iso(ts: Any) -> float:
     if not isinstance(ts, str) or not ts:
         return 0
     try:
-        return time.mktime(time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))
+        return calendar.timegm(time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))
     except ValueError:
         return 0
 
@@ -181,6 +183,13 @@ def aggregate_state(state: dict[str, Any], fallback: dict[str, Any]) -> dict[str
         current_event = str(state.get("event") or "")
         current_payload = state.get("payload") if isinstance(state.get("payload"), dict) else {}
         current_updated = parse_iso(state.get("updated_at"))
+        if (
+            current_mode in {"success", "error", "green", "red", "yellow"}
+            and current_updated > 0
+            and TERMINAL_HOLD_SECONDS > 0
+            and time.time() - current_updated <= TERMINAL_HOLD_SECONDS
+        ):
+            return state
         current_is_fallback = (
             current_source == "cc-connect-hook"
             and not has_real_session_key(current_payload)
@@ -337,7 +346,7 @@ class CodexLightHandler(BaseHTTPRequestHandler):
             return state
 
         should_track_session = has_real_session_key(payload)
-        if event in TERMINAL_EVENTS or mode in {"off", "success"}:
+        if event in TERMINAL_EVENTS or mode in {"off", "success", "error"}:
             active_sessions.pop(key, None)
         elif should_track_session and mode in ACTIVE_MODES:
             active_sessions[key] = incoming

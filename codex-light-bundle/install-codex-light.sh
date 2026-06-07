@@ -14,10 +14,12 @@ cp "$SRC_DIR/codex_light.py" "$DEST_DIR/"
 cp "$SRC_DIR/codex_light_ble.py" "$DEST_DIR/"
 cp "$SRC_DIR/codex_light_http_client.py" "$DEST_DIR/"
 cp "$SRC_DIR/codex_light_server.py" "$DEST_DIR/"
+cp "$SRC_DIR/codex_light_desktop_watcher.py" "$DEST_DIR/"
 cp "$SRC_DIR/cc_connect_light.sh" "$DEST_DIR/"
 chmod +x "$DEST_DIR/codex_light.py"
 chmod +x "$DEST_DIR/codex_light_http_client.py"
 chmod +x "$DEST_DIR/codex_light_server.py"
+chmod +x "$DEST_DIR/codex_light_desktop_watcher.py"
 chmod +x "$DEST_DIR/cc_connect_light.sh"
 
 if ! mkdir -p "$(dirname "$HOOKS_FILE")"; then
