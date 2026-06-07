@@ -162,8 +162,12 @@ The HTTP relay aggregates all active sessions before exposing one light mode:
 |---|---|
 | Any session is waiting for permission | `yellow` |
 | Any session has an error | `error` |
-| Any session is running | `traffic` |
+| Any session is running | `thinking` |
 | All sessions are done | `off` |
+
+Set `CODEX_LIGHT_RUNNING_MODE=traffic` only if your flashed firmware maps
+`traffic` to the running effect you want. The bundled ESP32 firmware uses
+`thinking` as the traffic-light run animation, so that is the default.
 
 Run the HTTP status server on the local machine near the light. Use
 `0.0.0.0` if remote servers need to POST directly to it:

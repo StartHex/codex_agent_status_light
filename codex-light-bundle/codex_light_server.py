@@ -94,7 +94,7 @@ STALE_FALLBACK_SECONDS = int(os.environ.get("CODEX_LIGHT_STALE_FALLBACK_SECONDS"
 TERMINAL_HOLD_SECONDS = float(os.environ.get("CODEX_LIGHT_TERMINAL_HOLD_SECONDS", "3"))
 ERROR_HOLD_SECONDS = float(os.environ.get("CODEX_LIGHT_ERROR_HOLD_SECONDS", "60"))
 SESSION_STALE_SECONDS = float(os.environ.get("CODEX_LIGHT_SESSION_STALE_SECONDS", "300"))
-RUNNING_AGGREGATE_MODE = os.environ.get("CODEX_LIGHT_RUNNING_MODE", "traffic").strip().lower() or "traffic"
+RUNNING_AGGREGATE_MODE = os.environ.get("CODEX_LIGHT_RUNNING_MODE", "thinking").strip().lower() or "thinking"
 
 
 def now_iso() -> str:
@@ -208,7 +208,7 @@ def aggregate_mode(active_sessions: dict[str, dict[str, Any]]) -> tuple[str, dic
     if errors:
         return "error", max(errors, key=lambda item: str(item.get("updated_at") or ""))
     if running:
-        mode = RUNNING_AGGREGATE_MODE if RUNNING_AGGREGATE_MODE in VALID_MODES else "traffic"
+        mode = RUNNING_AGGREGATE_MODE if RUNNING_AGGREGATE_MODE in VALID_MODES else "thinking"
         return mode, max(running, key=lambda item: str(item.get("updated_at") or ""))
     if other:
         _, best = max(active_sessions.items(), key=ranked_session)

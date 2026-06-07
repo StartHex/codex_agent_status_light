@@ -157,7 +157,8 @@ def run_poll(args: argparse.Namespace) -> int:
             status = extract_status(response)
             mode = str(status.get("mode") or "").strip().lower()
             seq = int(status.get("seq") or 0)
-            if mode in VALID_MODES and (args.force or seq != last_seq or mode != last_mode):
+            should_send = args.force or mode != last_mode or (args.send_on_seq and seq != last_seq)
+            if mode in VALID_MODES and should_send:
                 print(f"CodexLight seq={seq} mode={mode} source={status.get('source')}")
                 rc = send_light(mode, driver=args.driver, serial_port=args.serial_port, dry_run=args.dry_run)
                 if rc == 0:
@@ -196,6 +197,11 @@ def parse_args() -> argparse.Namespace:
     poll.add_argument("--serial-port", default=os.environ.get("CODEX_LIGHT_SERIAL_PORT", ""))
     poll.add_argument("--dry-run", action="store_true")
     poll.add_argument("--force", action="store_true", help="Send every poll even when seq/mode did not change")
+    poll.add_argument(
+        "--send-on-seq",
+        action="store_true",
+        help="Send when the server sequence changes even if the aggregate mode did not change",
+    )
     poll.set_defaults(func=run_poll)
     return parser.parse_args()
 
