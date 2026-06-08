@@ -3,11 +3,19 @@ name: Build CodexLight Desktop
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+    tags:
+      - "v*"
     paths:
       - ".github/workflows/build-codexlight-desktop.yml"
       - "codex-light-bundle/**"
       - "codex-light-desktop/**"
       - "tests/**"
+
+permissions:
+  contents: write
+  packages: write
 
 jobs:
   test:
@@ -109,3 +117,97 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_paths }}
           if-no-files-found: error
+
+  publish-release:
+    name: Publish Release assets
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Prepare release files
+        run: |
+          set -euo pipefail
+          mkdir -p release-files
+
+          cp release-artifacts/codexlight-macos-dmg/*.dmg release-files/
+          cp release-artifacts/codexlight-windows-exe/*.exe release-files/
+          find release-artifacts/codexlight-linux -type f -name "*.deb" -exec cp {} release-files/ \;
+
+          linux_bin="$(find release-artifacts/codexlight-linux -type f -name "codex-light-desktop" -print -quit)"
+          cp "$linux_bin" release-files/codex-light-desktop-linux-amd64
+          chmod +x release-files/codex-light-desktop-linux-amd64
+
+          ls -lh release-files
+
+      - name: Compute release metadata
+        id: release
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            tag="${GITHUB_REF_NAME}"
+            title="CodexLight ${GITHUB_REF_NAME}"
+            prerelease="false"
+          else
+            tag="codexlight-desktop-latest"
+            title="CodexLight Desktop latest"
+            prerelease="true"
+          fi
+
+          {
+            echo "tag=${tag}"
+            echo "title=${title}"
+            echo "prerelease=${prerelease}"
+          } >> "$GITHUB_OUTPUT"
+
+          cat > release-notes.md <<EOF
+          Automated CodexLight Desktop build.
+
+          Commit: ${GITHUB_SHA}
+          Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          Assets:
+          - macOS DMG
+          - Windows NSIS setup EXE
+          - Linux amd64 executable
+          - Linux amd64 DEB
+          EOF
+
+      - name: Move rolling release tag
+        if: steps.release.outputs.prerelease == 'true'
+        run: |
+          set -euo pipefail
+          git tag -f "${{ steps.release.outputs.tag }}" "${GITHUB_SHA}"
+          git push -f origin "refs/tags/${{ steps.release.outputs.tag }}"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          title="${{ steps.release.outputs.title }}"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" release-files/* --clobber
+            gh release edit "$tag" --title "$title" --notes-file release-notes.md
+          else
+            args=(
+              release create "$tag"
+              release-files/*
+              --target "${GITHUB_SHA}"
+              --title "$title"
+              --notes-file release-notes.md
+            )
+            if [[ "${{ steps.release.outputs.prerelease }}" == "true" ]]; then
+              args+=(--prerelease)
+            fi
+            gh "${args[@]}"
+          fi
