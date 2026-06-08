@@ -13,6 +13,10 @@ export function refreshStatus(): Promise<RuntimeSnapshot> {
   return invoke("refresh_status");
 }
 
+export function getSnapshot(): Promise<RuntimeSnapshot | null> {
+  return invoke("get_snapshot");
+}
+
 export function setManualMode(mode: string): Promise<RuntimeSnapshot> {
   return invoke("set_manual_mode", { mode });
 }

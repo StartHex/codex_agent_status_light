@@ -19,7 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 import { activeCount, effectForSnapshot } from "./lib/lightEffect";
-import { getDiagnostics, getSettings, refreshStatus, saveSettings, setManualMode } from "./lib/tauriApi";
+import { getDiagnostics, getSettings, getSnapshot, refreshStatus, saveSettings, setManualMode } from "./lib/tauriApi";
 import type { AppSettings, LogEntry, RuntimeSnapshot } from "./lib/types";
 
 type Tab = "status" | "device" | "settings";
@@ -309,7 +309,17 @@ export default function App() {
       setSnapshot(event.payload);
       reloadLogs().catch(() => undefined);
     });
+    const snapshotInterval = window.setInterval(() => {
+      getSnapshot()
+        .then((latest) => {
+          if (latest) {
+            setSnapshot(latest);
+          }
+        })
+        .catch(() => undefined);
+    }, 1000);
     return () => {
+      window.clearInterval(snapshotInterval);
       unlistenPromise.then((unlisten) => unlisten()).catch(() => undefined);
     };
   }, [reloadLogs, reloadStatus]);

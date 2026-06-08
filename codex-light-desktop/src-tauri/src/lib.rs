@@ -170,8 +170,8 @@ fn active_count(status: &RuntimeStatus) -> usize {
 
 fn normalized_mode(mode: &str) -> &str {
     match mode {
-        "off" | "thinking" | "busy" | "ai" | "yellow" | "green" | "success" | "red" | "error" | "traffic"
-        | "alarm" | "demo" => mode,
+        "off" | "thinking" | "busy" | "ai" | "yellow" | "green" | "success" | "red" | "error"
+        | "traffic" | "alarm" | "demo" => mode,
         _ => "unknown",
     }
 }
@@ -214,7 +214,9 @@ fn tray_icon_name(snapshot: Option<&RuntimeSnapshot>, frame: usize) -> &'static 
             },
             _ => "disconnected",
         },
-        ConnectionState::Unauthorized | ConnectionState::Error | ConnectionState::Idle => "disconnected",
+        ConnectionState::Unauthorized | ConnectionState::Error | ConnectionState::Idle => {
+            "disconnected"
+        }
     }
 }
 
@@ -242,12 +244,19 @@ fn tray_tooltip(snapshot: Option<&RuntimeSnapshot>) -> String {
     )
 }
 
-fn build_tray_menu(app: &AppHandle, snapshot: Option<&RuntimeSnapshot>) -> Result<Menu<tauri::Wry>, String> {
+fn build_tray_menu(
+    app: &AppHandle,
+    snapshot: Option<&RuntimeSnapshot>,
+) -> Result<Menu<tauri::Wry>, String> {
     let menu = Menu::new(app).map_err(|err| err.to_string())?;
-    let summary = MenuItem::with_id(app, "summary", tray_tooltip(snapshot), false, None::<&str>).map_err(|err| err.to_string())?;
-    let open = MenuItem::with_id(app, MENU_OPEN, "Open Dashboard", true, None::<&str>).map_err(|err| err.to_string())?;
-    let refresh = MenuItem::with_id(app, MENU_REFRESH, "Refresh Now", true, None::<&str>).map_err(|err| err.to_string())?;
-    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>).map_err(|err| err.to_string())?;
+    let summary = MenuItem::with_id(app, "summary", tray_tooltip(snapshot), false, None::<&str>)
+        .map_err(|err| err.to_string())?;
+    let open = MenuItem::with_id(app, MENU_OPEN, "Open Dashboard", true, None::<&str>)
+        .map_err(|err| err.to_string())?;
+    let refresh = MenuItem::with_id(app, MENU_REFRESH, "Refresh Now", true, None::<&str>)
+        .map_err(|err| err.to_string())?;
+    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>)
+        .map_err(|err| err.to_string())?;
     let sep1 = PredefinedMenuItem::separator(app).map_err(|err| err.to_string())?;
     let sep2 = PredefinedMenuItem::separator(app).map_err(|err| err.to_string())?;
     menu.append(&summary).map_err(|err| err.to_string())?;
@@ -277,7 +286,10 @@ fn update_tray(app: &AppHandle) {
     }
     #[cfg(target_os = "macos")]
     {
-        let title = snapshot.as_ref().map(|item| item.status.mode.clone()).unwrap_or_else(|| "off".to_string());
+        let title = snapshot
+            .as_ref()
+            .map(|item| item.status.mode.clone())
+            .unwrap_or_else(|| "off".to_string());
         let _ = tray.set_title(Some(title));
     }
 }
@@ -381,10 +393,9 @@ async fn refresh_and_store(app: AppHandle) -> RuntimeSnapshot {
         push_log(
             &mut guard,
             level,
-            snapshot
-                .message
-                .clone()
-                .unwrap_or_else(|| format!("mode={} seq={}", snapshot.status.mode, snapshot.status.seq)),
+            snapshot.message.clone().unwrap_or_else(|| {
+                format!("mode={} seq={}", snapshot.status.mode, snapshot.status.seq)
+            }),
         );
         guard.snapshot = Some(snapshot.clone());
     }
@@ -419,11 +430,19 @@ fn start_background_poller(app: AppHandle) {
     });
 }
 
+fn refresh_in_background(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        refresh_and_store(app).await;
+    });
+}
+
 fn restore_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
     }
+    refresh_in_background(app);
 }
 
 #[tauri::command]
@@ -433,9 +452,17 @@ fn get_settings(state: State<'_, AppState>) -> AppSettings {
 }
 
 #[tauri::command]
-fn save_settings(settings: AppSettings, app: AppHandle, state: State<'_, AppState>) -> Result<AppSettings, String> {
+fn save_settings(
+    settings: AppSettings,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<AppSettings, String> {
     let mut normalized = settings;
-    normalized.server_url = normalized.server_url.trim().trim_end_matches('/').to_string();
+    normalized.server_url = normalized
+        .server_url
+        .trim()
+        .trim_end_matches('/')
+        .to_string();
     if normalized.server_url.is_empty() {
         normalized.server_url = AppSettings::default().server_url;
     }
@@ -457,6 +484,11 @@ async fn refresh_status(app: AppHandle) -> RuntimeSnapshot {
 }
 
 #[tauri::command]
+fn get_snapshot(state: State<'_, AppState>) -> Option<RuntimeSnapshot> {
+    state.0.lock().expect("state poisoned").snapshot.clone()
+}
+
+#[tauri::command]
 async fn set_manual_mode(mode: String, app: AppHandle) -> RuntimeSnapshot {
     let settings = {
         let state = app.state::<AppState>();
@@ -467,7 +499,11 @@ async fn set_manual_mode(mode: String, app: AppHandle) -> RuntimeSnapshot {
     {
         let state = app.state::<AppState>();
         let mut guard = state.0.lock().expect("state poisoned");
-        push_log(&mut guard, "info", format!("manual mode -> {}", snapshot.status.mode));
+        push_log(
+            &mut guard,
+            "info",
+            format!("manual mode -> {}", snapshot.status.mode),
+        );
         guard.snapshot = Some(snapshot.clone());
     }
     update_tray(&app);
@@ -494,6 +530,7 @@ pub fn run() {
             get_settings,
             save_settings,
             refresh_status,
+            get_snapshot,
             set_manual_mode,
             get_diagnostics
         ])
@@ -533,11 +570,15 @@ pub fn run() {
             }
             _ => {}
         })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            WindowEvent::Focused(true) => {
+                refresh_in_background(window.app_handle());
+            }
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running CodexLight");
