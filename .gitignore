@@ -4,3 +4,8 @@ __MACOSX/
 codex-light-bundle/*.log
 codex-light-bundle/*state.json
 codex-light-bundle/*.lock
+codex-light-desktop/dist/
+codex-light-desktop/node_modules/
+codex-light-desktop/src-tauri/gen/
+codex-light-desktop/src-tauri/target/
+dist-artifacts/

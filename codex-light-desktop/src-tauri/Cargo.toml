@@ -1,0 +1,21 @@
+[package]
+name = "codex-light-desktop"
+version = "0.1.0"
+description = "Cross-platform CodexLight tray and GUI"
+authors = ["CodexLight"]
+edition = "2021"
+
+[lib]
+name = "codex_light_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", features = [] }
+
+[dependencies]
+dirs-next = "2.0"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.6.2", features = ["tray-icon", "image-png"] }
+tokio = { version = "1", features = ["time"] }
